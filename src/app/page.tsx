@@ -1,65 +1,134 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState, useCallback } from "react";
+import { SprintBoard } from "@/components/dashboard/sprint-board";
+import { KanbanView } from "@/components/dashboard/kanban-view";
+import { ProjectCards } from "@/components/dashboard/project-cards";
+import { CronHealth } from "@/components/dashboard/cron-health";
+import { AgentActivity } from "@/components/dashboard/agent-activity";
+import { IdeasPipeline } from "@/components/dashboard/ideas-pipeline";
+import { mockCronJobs, mockAgentRuns } from "@/lib/mock-data";
+import type { GitHubIssue, GitHubPR, GitHubActivity } from "@/lib/types";
+import { RefreshCw, Radio } from "lucide-react";
+
+const REFRESH_INTERVAL = parseInt(
+  process.env.NEXT_PUBLIC_REFRESH_INTERVAL || "60000",
+  10
+);
+
+export default function Dashboard() {
+  const [issues, setIssues] = useState<GitHubIssue[]>([]);
+  const [prs, setPRs] = useState<GitHubPR[]>([]);
+  const [activity, setActivity] = useState<GitHubActivity[]>([]);
+  const [lastUpdate, setLastUpdate] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const fetchData = useCallback(async (isRefresh = false) => {
+    if (isRefresh) setRefreshing(true);
+    try {
+      const [issuesRes, prsRes, activityRes] = await Promise.allSettled([
+        fetch("/api/github/issues"),
+        fetch("/api/github/prs"),
+        fetch("/api/github/activity"),
+      ]);
+
+      if (issuesRes.status === "fulfilled" && issuesRes.value.ok) {
+        const data = await issuesRes.value.json();
+        setIssues(data.issues || []);
+      }
+      if (prsRes.status === "fulfilled" && prsRes.value.ok) {
+        const data = await prsRes.value.json();
+        setPRs(data.prs || []);
+      }
+      if (activityRes.status === "fulfilled" && activityRes.value.ok) {
+        const data = await activityRes.value.json();
+        setActivity(data.activity || []);
+      }
+
+      setLastUpdate(new Date().toLocaleTimeString());
+    } catch (err) {
+      console.error("Failed to fetch dashboard data:", err);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchData();
+    const interval = setInterval(() => fetchData(true), REFRESH_INTERVAL);
+    return () => clearInterval(interval);
+  }, [fetchData]);
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen bg-zinc-950 text-zinc-100">
+      {/* Header */}
+      <header className="sticky top-0 z-50 border-b border-zinc-800/50 bg-zinc-950/80 backdrop-blur-md">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-3">
+            <Radio className="h-5 w-5 text-emerald-500" />
+            <h1 className="text-xl font-bold tracking-tight text-zinc-50">
+              Mission Control
+            </h1>
+          </div>
+          <div className="flex items-center gap-4">
+            {lastUpdate && (
+              <span className="font-mono text-xs text-zinc-500">
+                Updated {lastUpdate}
+              </span>
+            )}
+            <button
+              onClick={() => fetchData(true)}
+              disabled={refreshing}
+              className="flex items-center gap-1.5 rounded-md border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-400 transition-colors hover:border-zinc-700 hover:text-zinc-300 disabled:opacity-50"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${refreshing ? "animate-spin" : ""}`}
+              />
+              Refresh
+            </button>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+      </header>
+
+      {/* Loading State */}
+      {loading ? (
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <div className="flex flex-col items-center gap-3">
+            <RefreshCw className="h-6 w-6 animate-spin text-zinc-500" />
+            <p className="text-sm text-zinc-500">Loading dashboard...</p>
+          </div>
         </div>
-      </main>
+      ) : (
+        <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
+          {/* Section 1: Sprint Board (hero) */}
+          <SprintBoard issues={issues} />
+
+          {/* Section 2: Kanban View */}
+          <KanbanView issues={issues} />
+
+          {/* Section 3: Project Cards */}
+          <ProjectCards issues={issues} prs={prs} activity={activity} />
+
+          {/* Section 4 & 5: Cron Health + Agent Activity (side by side) */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <CronHealth jobs={mockCronJobs} />
+            <AgentActivity runs={mockAgentRuns} />
+          </div>
+
+          {/* Section 6: Ideas Pipeline */}
+          <IdeasPipeline issues={issues} />
+
+          {/* Footer */}
+          <footer className="border-t border-zinc-800/30 py-4">
+            <p className="text-center font-mono text-xs text-zinc-600">
+              Mission Control v0.1.0 &middot; Auto-refresh{" "}
+              {REFRESH_INTERVAL / 1000}s
+            </p>
+          </footer>
+        </main>
+      )}
     </div>
   );
 }
