@@ -117,6 +117,20 @@ export interface Idea {
   body_preview: string;
 }
 
+// ── Sprint Plan (from sprint.md) ──
+export type SprintTier = "high" | "ready_to_build" | "validation" | "operations" | "backlog" | "paused";
+
+export interface SprintEntry {
+  id: string;
+  repo: string;
+  number: number;
+  title: string;
+  tags: string[];
+  tier: SprintTier;
+  status: "done" | "failed" | "in_progress" | "ready";
+  section: string;
+}
+
 // ── Dashboard Data ──
 export interface DashboardData {
   issues: GitHubIssue[];

@@ -3,71 +3,65 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { GitHubIssue, PriorityTier, SprintItem } from "@/lib/types";
-import { daysAgo, repoShortName, timeAgo } from "@/lib/utils-dashboard";
-import { AlertTriangle, Clock, Zap, FlaskConical, Archive, ChevronDown, ChevronRight } from "lucide-react";
+import type { SprintEntry, SprintTier } from "@/lib/types";
+import { Zap, Clock, FlaskConical, Settings, Archive, Pause, ChevronDown, ChevronRight, CheckCircle2, XCircle } from "lucide-react";
 
-function classifyPriority(issue: GitHubIssue): PriorityTier {
-  const labels = issue.labels.map((l) => l.name.toLowerCase());
-  if (labels.some((l) => l.includes("urgent") || l.includes("high") || l.includes("priority") || l.includes("p0") || l.includes("p1")))
-    return "high";
-  if (labels.some((l) => l.includes("ready") || l.includes("next") || l.includes("sprint")))
-    return "ready_to_build";
-  if (labels.some((l) => l.includes("research") || l.includes("validation") || l.includes("explore")))
-    return "validation";
-  return "backlog";
-}
-
-function classifyStatus(issue: GitHubIssue): SprintItem["status"] {
-  const labels = issue.labels.map((l) => l.name.toLowerCase());
-  if (labels.some((l) => l.includes("done") || l.includes("closed"))) return "done";
-  if (labels.some((l) => l.includes("review") || l.includes("pr"))) return "review";
-  if (labels.some((l) => l.includes("progress") || l.includes("wip"))) return "in_progress";
-  return "ready";
-}
-
-const TIER_CONFIG: Record<PriorityTier, { label: string; icon: React.ReactNode; color: string }> = {
+const TIER_CONFIG: Record<SprintTier, { label: string; icon: React.ReactNode; color: string }> = {
   high: { label: "High Priority", icon: <Zap className="h-4 w-4" />, color: "text-red-400" },
   ready_to_build: { label: "Ready to Build", icon: <Clock className="h-4 w-4" />, color: "text-blue-400" },
   validation: { label: "Validation / Research", icon: <FlaskConical className="h-4 w-4" />, color: "text-amber-400" },
+  operations: { label: "Operations", icon: <Settings className="h-4 w-4" />, color: "text-purple-400" },
   backlog: { label: "Backlog", icon: <Archive className="h-4 w-4" />, color: "text-zinc-400" },
+  paused: { label: "Paused", icon: <Pause className="h-4 w-4" />, color: "text-zinc-500" },
 };
 
-export function SprintBoard({ issues }: { issues: GitHubIssue[] }) {
-  const [showBacklog, setShowBacklog] = useState(false);
-  const filteredIssues = issues.filter((i) => i.repo !== "daldc/ideas");
+const ACTIVE_TIERS: SprintTier[] = ["high", "ready_to_build", "validation", "operations"];
+const COLLAPSED_TIERS: SprintTier[] = ["backlog", "paused"];
 
-  const sprintItems: SprintItem[] = filteredIssues.map((issue) => ({
-    ...issue,
-    priority: classifyPriority(issue),
-    status: classifyStatus(issue),
-    age_days: daysAgo(issue.created_at),
-  }));
+function repoShort(repo: string) {
+  return repo.replace("daldc/", "");
+}
 
-  const activeTiers: PriorityTier[] = ["high", "ready_to_build", "validation"];
-  const activeItems = sprintItems.filter((i) => activeTiers.includes(i.priority));
-  const backlogItems = sprintItems.filter((i) => i.priority === "backlog");
+function issueUrl(entry: SprintEntry) {
+  if (!entry.repo || !entry.number) return null;
+  return `https://github.com/${entry.repo}/issues/${entry.number}`;
+}
+
+export function SprintBoard({ entries, lastUpdated }: { entries: SprintEntry[]; lastUpdated: string }) {
+  const [expandedCollapsed, setExpandedCollapsed] = useState<Record<string, boolean>>({});
+
+  const activeEntries = entries.filter((e) => ACTIVE_TIERS.includes(e.tier) && e.status !== "done" && e.status !== "failed");
+  const doneEntries = entries.filter((e) => e.status === "done" || e.status === "failed");
+  const collapsedEntries = entries.filter((e) => COLLAPSED_TIERS.includes(e.tier) && e.status !== "done" && e.status !== "failed");
 
   return (
     <Card className="border-zinc-800 bg-zinc-950">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold text-zinc-100">
-            Sprint Board
-          </CardTitle>
+          <div>
+            <CardTitle className="text-lg font-semibold text-zinc-100">
+              Sprint Board
+            </CardTitle>
+            {lastUpdated && (
+              <p className="mt-1 text-xs text-zinc-500">Sprint updated {lastUpdated}</p>
+            )}
+          </div>
           <div className="flex items-center gap-3">
             <span className="font-mono text-xs text-zinc-500">
-              {activeItems.length} active
+              {activeEntries.length} active
             </span>
-            <span className="font-mono text-xs text-zinc-600">
-              {backlogItems.length} backlog
-            </span>
+            {doneEntries.length > 0 && (
+              <span className="font-mono text-xs text-emerald-500/70">
+                {doneEntries.filter(e => e.status === "done").length} done
+              </span>
+            )}
           </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-6">
-        {activeTiers.map((tier) => {
-          const items = sprintItems.filter((i) => i.priority === tier);
+        {/* Active tiers */}
+        {ACTIVE_TIERS.map((tier) => {
+          const items = activeEntries.filter((e) => e.tier === tier);
           if (items.length === 0) return null;
           const config = TIER_CONFIG[tier];
           return (
@@ -78,128 +72,115 @@ export function SprintBoard({ issues }: { issues: GitHubIssue[] }) {
                 <span className="font-mono text-xs text-zinc-500">({items.length})</span>
               </div>
               <div className="space-y-2">
-                {items.slice(0, 8).map((item) => (
-                  <a
-                    key={item.id}
-                    href={item.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-3 rounded-md border border-zinc-800/50 bg-zinc-900/50 px-3 py-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900"
-                  >
-                    <StatusDot status={item.status} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-200 group-hover:text-zinc-50">
-                        {item.title}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="font-mono text-xs text-zinc-500">
-                          {repoShortName(item.repo)}#{item.number}
-                        </span>
-                        {item.labels.slice(0, 3).map((label) => (
-                          <Badge
-                            key={label.name}
-                            variant="outline"
-                            className="border-zinc-700 px-1.5 py-0 text-[10px] text-zinc-400"
-                          >
-                            {label.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {item.age_days >= 14 && (
-                        <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
-                      )}
-                      {item.age_days >= 7 && item.age_days < 14 && (
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
-                      )}
-                      <span className="font-mono text-xs text-zinc-500">
-                        {timeAgo(item.updated_at)}
-                      </span>
-                    </div>
-                  </a>
+                {items.map((item) => (
+                  <SprintItemRow key={item.id} item={item} />
                 ))}
               </div>
             </div>
           );
         })}
-        {/* Collapsible Backlog */}
-        {backlogItems.length > 0 && (
+
+        {/* Done today/yesterday */}
+        {doneEntries.length > 0 && (
           <div>
-            <button
-              onClick={() => setShowBacklog(!showBacklog)}
-              className="flex items-center gap-2 mb-3 text-zinc-400 hover:text-zinc-300 transition-colors"
-            >
-              {showBacklog ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-              <Archive className="h-4 w-4" />
-              <h3 className="text-sm font-medium">Backlog</h3>
-              <span className="font-mono text-xs text-zinc-500">({backlogItems.length})</span>
-            </button>
-            {showBacklog && (
-              <div className="space-y-2">
-                {backlogItems.map((item) => (
-                  <a
-                    key={item.id}
-                    href={item.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="group flex items-center gap-3 rounded-md border border-zinc-800/50 bg-zinc-900/50 px-3 py-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900"
-                  >
-                    <StatusDot status={item.status} />
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm text-zinc-200 group-hover:text-zinc-50">
-                        {item.title}
-                      </p>
-                      <div className="mt-1 flex items-center gap-2">
-                        <span className="font-mono text-xs text-zinc-500">
-                          {repoShortName(item.repo)}#{item.number}
-                        </span>
-                        {item.labels.slice(0, 3).map((label) => (
-                          <Badge
-                            key={label.name}
-                            variant="outline"
-                            className="border-zinc-700 px-1.5 py-0 text-[10px] text-zinc-400"
-                          >
-                            {label.name}
-                          </Badge>
-                        ))}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {item.age_days >= 14 && (
-                        <AlertTriangle className="h-3.5 w-3.5 text-red-400" />
-                      )}
-                      {item.age_days >= 7 && item.age_days < 14 && (
-                        <AlertTriangle className="h-3.5 w-3.5 text-amber-400" />
-                      )}
-                      <span className="font-mono text-xs text-zinc-500">
-                        {timeAgo(item.updated_at)}
-                      </span>
-                    </div>
-                  </a>
-                ))}
-              </div>
-            )}
+            <div className="flex items-center gap-2 mb-3 text-emerald-400">
+              <CheckCircle2 className="h-4 w-4" />
+              <h3 className="text-sm font-medium">Recently Completed</h3>
+              <span className="font-mono text-xs text-zinc-500">({doneEntries.length})</span>
+            </div>
+            <div className="space-y-2">
+              {doneEntries.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-3 rounded-md border border-zinc-800/30 bg-zinc-900/30 px-3 py-2.5 opacity-70"
+                >
+                  {item.status === "done" ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-500" />
+                  ) : (
+                    <XCircle className="h-4 w-4 shrink-0 text-red-400" />
+                  )}
+                  <p className="text-sm text-zinc-400 line-through truncate">{item.title}</p>
+                </div>
+              ))}
+            </div>
           </div>
         )}
-        {sprintItems.length === 0 && (
-          <p className="text-center text-sm text-zinc-500 py-8">No issues found</p>
+
+        {/* Collapsed tiers (backlog, paused) */}
+        {COLLAPSED_TIERS.map((tier) => {
+          const items = collapsedEntries.filter((e) => e.tier === tier);
+          if (items.length === 0) return null;
+          const config = TIER_CONFIG[tier];
+          const isOpen = expandedCollapsed[tier] || false;
+          return (
+            <div key={tier}>
+              <button
+                onClick={() => setExpandedCollapsed((prev) => ({ ...prev, [tier]: !isOpen }))}
+                className={`flex items-center gap-2 mb-3 ${config.color} hover:brightness-125 transition-all`}
+              >
+                {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                {config.icon}
+                <h3 className="text-sm font-medium">{config.label}</h3>
+                <span className="font-mono text-xs text-zinc-500">({items.length})</span>
+              </button>
+              {isOpen && (
+                <div className="space-y-2">
+                  {items.map((item) => (
+                    <SprintItemRow key={item.id} item={item} />
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
+
+        {entries.length === 0 && (
+          <p className="text-center text-sm text-zinc-500 py-8">No sprint data found</p>
         )}
       </CardContent>
     </Card>
   );
 }
 
-function StatusDot({ status }: { status: SprintItem["status"] }) {
-  const colors: Record<string, string> = {
-    ready: "bg-zinc-500",
-    in_progress: "bg-blue-500",
-    review: "bg-amber-500",
-    done: "bg-emerald-500",
-  };
+function SprintItemRow({ item }: { item: SprintEntry }) {
+  const url = issueUrl(item);
+  const Wrapper = url ? "a" : "div";
+  const linkProps = url ? { href: url, target: "_blank", rel: "noopener noreferrer" } : {};
+
   return (
-    <span
-      className={`h-2 w-2 shrink-0 rounded-full ${colors[status] || "bg-zinc-500"}`}
-    />
+    <Wrapper
+      {...linkProps}
+      className="group flex items-center gap-3 rounded-md border border-zinc-800/50 bg-zinc-900/50 px-3 py-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900"
+    >
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-zinc-200 group-hover:text-zinc-50">
+          {item.title}
+        </p>
+        <div className="mt-1 flex items-center gap-2 flex-wrap">
+          {item.repo && (
+            <span className="font-mono text-xs text-zinc-500">
+              {repoShort(item.repo)}#{item.number}
+            </span>
+          )}
+          {item.tags.map((tag) => (
+            <Badge
+              key={tag}
+              variant="outline"
+              className={`px-1.5 py-0 text-[10px] ${
+                /high\s*priority/i.test(tag) || /urgent/i.test(tag)
+                  ? "border-red-800 text-red-400"
+                  : /sprint/i.test(tag)
+                  ? "border-blue-800 text-blue-400"
+                  : /research/i.test(tag)
+                  ? "border-amber-800 text-amber-400"
+                  : "border-zinc-700 text-zinc-400"
+              }`}
+            >
+              {tag}
+            </Badge>
+          ))}
+        </div>
+      </div>
+    </Wrapper>
   );
 }
