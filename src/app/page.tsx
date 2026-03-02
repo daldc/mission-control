@@ -118,7 +118,7 @@ export default function Dashboard() {
           </div>
 
           {/* Section 6: Ideas Pipeline */}
-          <IdeasPipeline issues={issues} />
+          <IdeasPipeline issues={issues} onRefresh={() => fetchData(true)} />
 
           {/* Footer */}
           <footer className="border-t border-zinc-800/30 py-4">
