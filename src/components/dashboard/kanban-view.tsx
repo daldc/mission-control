@@ -10,70 +10,42 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { SprintEntry, GitHubIssue } from "@/lib/types";
+import type { GitHubIssue } from "@/lib/types";
+import { repoShortName, timeAgo } from "@/lib/utils-dashboard";
 
 type KanbanColumn = "backlog" | "ready" | "in_progress" | "review" | "done";
 
-const COLUMNS: { key: KanbanColumn; label: string; color: string }[] = [
-  { key: "backlog", label: "Backlog", color: "border-t-zinc-500" },
-  { key: "ready", label: "Ready", color: "border-t-blue-500" },
-  { key: "in_progress", label: "In Progress", color: "border-t-amber-500" },
-  { key: "review", label: "Review", color: "border-t-purple-500" },
-  { key: "done", label: "Done", color: "border-t-emerald-500" },
+const COLUMNS: { key: KanbanColumn; label: string; color: string; statusLabel: string }[] = [
+  { key: "backlog", label: "Backlog", color: "border-t-zinc-500", statusLabel: "status:backlog" },
+  { key: "ready", label: "Ready", color: "border-t-blue-500", statusLabel: "status:ready" },
+  { key: "in_progress", label: "In Progress", color: "border-t-amber-500", statusLabel: "status:in-progress" },
+  { key: "review", label: "Review", color: "border-t-purple-500", statusLabel: "status:review" },
+  { key: "done", label: "Done", color: "border-t-emerald-500", statusLabel: "status:done" },
 ];
 
-function sprintEntryToColumn(entry: SprintEntry, ghIssue?: GitHubIssue): KanbanColumn {
-  // First check sprint entry status
-  if (entry.status === "done") return "done";
-  if (entry.status === "failed") return "done";
-  if (entry.status === "in_progress") return "in_progress";
-
-  // Check GitHub issue labels for more granularity
-  if (ghIssue) {
-    const labels = ghIssue.labels.map((l) => l.name.toLowerCase());
-    if (labels.some((l) => l.includes("review") || l.includes("pr"))) return "review";
-    if (labels.some((l) => l.includes("progress") || l.includes("wip"))) return "in_progress";
-  }
-
-  // Map sprint tier to column
-  if (entry.tier === "backlog" || entry.tier === "paused") return "backlog";
-  if (entry.tier === "high" || entry.tier === "ready_to_build") return "ready";
-  if (entry.tier === "validation" || entry.tier === "operations") return "ready";
-
+function getColumn(issue: GitHubIssue): KanbanColumn {
+  const labels = issue.labels.map((l) => l.name);
+  if (labels.includes("status:done")) return "done";
+  if (labels.includes("status:review")) return "review";
+  if (labels.includes("status:in-progress")) return "in_progress";
+  if (labels.includes("status:ready")) return "ready";
+  if (labels.includes("status:backlog")) return "backlog";
+  // No status label → backlog
   return "backlog";
 }
 
-function repoShort(repo: string) {
-  return repo.replace("daldc/", "");
-}
-
-function issueUrl(entry: SprintEntry) {
-  if (!entry.repo || !entry.number) return null;
-  return `https://github.com/${entry.repo}/issues/${entry.number}`;
-}
-
-export function KanbanView({ sprintEntries, issues }: { sprintEntries: SprintEntry[]; issues: GitHubIssue[] }) {
+export function KanbanView({ issues }: { issues: GitHubIssue[] }) {
   const [repoFilter, setRepoFilter] = useState<string>("all");
 
-  // Build a lookup of GitHub issues for enrichment
-  const issueMap = new Map<string, GitHubIssue>();
-  for (const issue of issues) {
-    issueMap.set(`${issue.repo}#${issue.number}`, issue);
-  }
+  const filteredIssues = issues
+    .filter((i) => i.repo !== "daldc/ideas")
+    .filter((i) => repoFilter === "all" || i.repo === repoFilter);
 
-  // Only show entries that have real issue refs (skip done summary items without repos)
-  const kanbanEntries = sprintEntries
-    .filter((e) => e.repo && e.number > 0)
-    .filter((e) => repoFilter === "all" || e.repo === repoFilter);
-
-  const repos = Array.from(new Set(sprintEntries.filter((e) => e.repo).map((e) => e.repo)));
+  const repos = Array.from(new Set(issues.filter((i) => i.repo !== "daldc/ideas").map((i) => i.repo)));
 
   const grouped = COLUMNS.map((col) => ({
     ...col,
-    items: kanbanEntries.filter((e) => {
-      const ghIssue = issueMap.get(`${e.repo}#${e.number}`);
-      return sprintEntryToColumn(e, ghIssue) === col.key;
-    }),
+    items: filteredIssues.filter((i) => getColumn(i) === col.key),
   }));
 
   return (
@@ -91,7 +63,7 @@ export function KanbanView({ sprintEntries, issues }: { sprintEntries: SprintEnt
               <SelectItem value="all" className="text-xs text-zinc-300">All repos</SelectItem>
               {repos.map((repo) => (
                 <SelectItem key={repo} value={repo} className="text-xs text-zinc-300">
-                  {repoShort(repo)}
+                  {repoShortName(repo)}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -107,34 +79,60 @@ export function KanbanView({ sprintEntries, issues }: { sprintEntries: SprintEnt
                 <span className="font-mono text-[10px] text-zinc-600">{col.items.length}</span>
               </div>
               <div className="space-y-2 px-2 pb-2 max-h-[400px] overflow-y-auto">
-                {col.items.map((entry) => {
-                  const url = issueUrl(entry);
-                  const Wrapper = url ? "a" : "div";
-                  const linkProps = url ? { href: url, target: "_blank" as const, rel: "noopener noreferrer" } : {};
+                {col.items.map((issue) => {
+                  const priorityLabels = issue.labels.filter((l) => l.name.startsWith("priority:"));
+                  const otherLabels = issue.labels.filter(
+                    (l) => !l.name.startsWith("status:") && !l.name.startsWith("priority:")
+                  );
                   return (
-                    <Wrapper
-                      key={entry.id}
-                      {...linkProps}
+                    <a
+                      key={issue.id}
+                      href={issue.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
                       className="group block rounded-md border border-zinc-800/50 bg-zinc-950/80 p-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900"
                     >
                       <p className="text-xs text-zinc-300 leading-relaxed group-hover:text-zinc-100 line-clamp-2">
-                        {entry.title}
+                        {issue.title}
                       </p>
                       <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                         <span className="font-mono text-[10px] text-zinc-500">
-                          {repoShort(entry.repo)}
+                          {repoShortName(issue.repo)}
                         </span>
-                        {entry.tags.slice(0, 2).map((tag) => (
+                        {priorityLabels.map((label) => (
                           <Badge
-                            key={tag}
+                            key={label.name}
+                            variant="outline"
+                            className={`px-1 py-0 text-[9px] ${
+                              label.name === "priority:high"
+                                ? "border-red-800 text-red-400"
+                                : "border-blue-800 text-blue-400"
+                            }`}
+                          >
+                            {label.name.replace("priority:", "")}
+                          </Badge>
+                        ))}
+                        {otherLabels.slice(0, 1).map((label) => (
+                          <Badge
+                            key={label.name}
                             variant="outline"
                             className="border-zinc-700/50 px-1 py-0 text-[9px] text-zinc-500"
                           >
-                            {tag}
+                            {label.name}
                           </Badge>
                         ))}
                       </div>
-                    </Wrapper>
+                      <div className="mt-1.5 flex items-center justify-between">
+                        <span className="text-[10px] text-zinc-600">
+                          {timeAgo(issue.updated_at)}
+                        </span>
+                        {issue.assignee && (
+                          <span className="text-[10px] text-zinc-500">
+                            @{issue.assignee}
+                          </span>
+                        )}
+                      </div>
+                    </a>
                   );
                 })}
                 {col.items.length === 0 && (

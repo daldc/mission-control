@@ -8,7 +8,7 @@ import { CronHealth } from "@/components/dashboard/cron-health";
 import { AgentActivity } from "@/components/dashboard/agent-activity";
 import { IdeasPipeline } from "@/components/dashboard/ideas-pipeline";
 import { mockCronJobs, mockAgentRuns } from "@/lib/mock-data";
-import type { GitHubIssue, GitHubPR, GitHubActivity, SprintEntry } from "@/lib/types";
+import type { GitHubIssue, GitHubPR, GitHubActivity } from "@/lib/types";
 import { RefreshCw, Radio } from "lucide-react";
 
 const REFRESH_INTERVAL = parseInt(
@@ -20,8 +20,6 @@ export default function Dashboard() {
   const [issues, setIssues] = useState<GitHubIssue[]>([]);
   const [prs, setPRs] = useState<GitHubPR[]>([]);
   const [activity, setActivity] = useState<GitHubActivity[]>([]);
-  const [sprintEntries, setSprintEntries] = useState<SprintEntry[]>([]);
-  const [sprintUpdated, setSprintUpdated] = useState<string>("");
   const [lastUpdate, setLastUpdate] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -29,11 +27,10 @@ export default function Dashboard() {
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const [issuesRes, prsRes, activityRes, sprintRes] = await Promise.allSettled([
+      const [issuesRes, prsRes, activityRes] = await Promise.allSettled([
         fetch("/api/github/issues"),
         fetch("/api/github/prs"),
         fetch("/api/github/activity"),
-        fetch("/api/sprint"),
       ]);
 
       if (issuesRes.status === "fulfilled" && issuesRes.value.ok) {
@@ -47,11 +44,6 @@ export default function Dashboard() {
       if (activityRes.status === "fulfilled" && activityRes.value.ok) {
         const data = await activityRes.value.json();
         setActivity(data.activity || []);
-      }
-      if (sprintRes.status === "fulfilled" && sprintRes.value.ok) {
-        const data = await sprintRes.value.json();
-        setSprintEntries(data.entries || []);
-        setSprintUpdated(data.lastUpdated || "");
       }
 
       setLastUpdate(new Date().toLocaleTimeString());
@@ -111,10 +103,10 @@ export default function Dashboard() {
       ) : (
         <main className="mx-auto max-w-[1600px] space-y-6 px-6 py-6">
           {/* Section 1: Sprint Board (hero) */}
-          <SprintBoard entries={sprintEntries} lastUpdated={sprintUpdated} />
+          <SprintBoard issues={issues} />
 
           {/* Section 2: Kanban View */}
-          <KanbanView sprintEntries={sprintEntries} issues={issues} />
+          <KanbanView issues={issues} />
 
           {/* Section 3: Project Cards */}
           <ProjectCards issues={issues} prs={prs} activity={activity} />
