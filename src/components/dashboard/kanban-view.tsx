@@ -69,9 +69,10 @@ export function KanbanView({ issues }: { issues: GitHubIssue[] }) {
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-5 gap-3">
+        {/* Mobile: horizontal scroll with snap */}
+        <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-5 md:overflow-x-visible md:snap-none md:pb-0">
           {grouped.map((col) => (
-            <div key={col.key} className={`rounded-lg border border-zinc-800/50 bg-zinc-900/30 border-t-2 ${col.color}`}>
+            <div key={col.key} className={`min-w-[75vw] snap-center rounded-lg border border-zinc-800/50 bg-zinc-900/30 border-t-2 ${col.color} md:min-w-0`}>
               <div className="flex items-center justify-between px-3 py-2.5">
                 <h3 className="text-xs font-medium text-zinc-400">{col.label}</h3>
                 <span className="font-mono text-[10px] text-zinc-600">{col.items.length}</span>
