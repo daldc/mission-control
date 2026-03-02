@@ -7,8 +7,8 @@ import { ProjectCards } from "@/components/dashboard/project-cards";
 import { CronHealth } from "@/components/dashboard/cron-health";
 import { AgentActivity } from "@/components/dashboard/agent-activity";
 import { IdeasPipeline } from "@/components/dashboard/ideas-pipeline";
-import { mockCronJobs, mockAgentRuns } from "@/lib/mock-data";
-import type { GitHubIssue, GitHubPR, GitHubActivity } from "@/lib/types";
+import { mockAgentRuns } from "@/lib/mock-data";
+import type { GitHubIssue, GitHubPR, GitHubActivity, CronJob } from "@/lib/types";
 import { RefreshCw, Radio } from "lucide-react";
 
 const REFRESH_INTERVAL = parseInt(
@@ -20,6 +20,7 @@ export default function Dashboard() {
   const [issues, setIssues] = useState<GitHubIssue[]>([]);
   const [prs, setPRs] = useState<GitHubPR[]>([]);
   const [activity, setActivity] = useState<GitHubActivity[]>([]);
+  const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
   const [lastUpdate, setLastUpdate] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -27,10 +28,11 @@ export default function Dashboard() {
   const fetchData = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const [issuesRes, prsRes, activityRes] = await Promise.allSettled([
+      const [issuesRes, prsRes, activityRes, cronRes] = await Promise.allSettled([
         fetch("/api/github/issues"),
         fetch("/api/github/prs"),
         fetch("/api/github/activity"),
+        fetch("/api/cron/status"),
       ]);
 
       if (issuesRes.status === "fulfilled" && issuesRes.value.ok) {
@@ -44,6 +46,22 @@ export default function Dashboard() {
       if (activityRes.status === "fulfilled" && activityRes.value.ok) {
         const data = await activityRes.value.json();
         setActivity(data.activity || []);
+      }
+      if (cronRes.status === "fulfilled" && cronRes.value.ok) {
+        const data = await cronRes.value.json();
+        // Map gist data to CronJob type
+        const jobs: CronJob[] = (data.jobs || []).map((j: Record<string, unknown>) => ({
+          id: j.id as string,
+          name: j.name as string,
+          schedule: j.schedule as string,
+          schedule_human: j.schedule_human as string,
+          last_run: j.last_run as string,
+          next_run: j.next_run as string,
+          last_status: (j.last_status as string) === "ok" ? "success" : (j.last_status as string) === "error" ? "error" : "warning",
+          consecutive_errors: (j.consecutive_errors as number) || 0,
+          health: ((j.consecutive_errors as number) || 0) >= 2 ? "red" : ((j.consecutive_errors as number) || 0) === 1 ? "yellow" : "green",
+        }));
+        setCronJobs(jobs);
       }
 
       setLastUpdate(new Date().toLocaleTimeString());
@@ -113,7 +131,7 @@ export default function Dashboard() {
 
           {/* Section 4 & 5: Cron Health + Agent Activity (side by side) */}
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-            <CronHealth jobs={mockCronJobs} />
+            <CronHealth jobs={cronJobs} />
             <AgentActivity runs={mockAgentRuns} />
           </div>
 
