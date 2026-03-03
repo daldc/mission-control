@@ -206,19 +206,19 @@ function IdeaRow({
   }
 
   return (
-    <div className="group rounded-md border border-zinc-800/50 bg-zinc-900/50 px-3 py-2.5 transition-colors hover:border-zinc-700 hover:bg-zinc-900">
-      <div className="flex items-center gap-3">
-        <span className={`h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status] || "bg-zinc-500"}`} />
+    <div className="group rounded-md border border-zinc-800/50 bg-zinc-900/50 px-3 py-3 transition-colors hover:border-zinc-700 hover:bg-zinc-900">
+      <div className="flex items-start gap-3">
+        <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${STATUS_DOT[status] || "bg-zinc-500"}`} />
         <div className="min-w-0 flex-1">
           <a
             href={issue.html_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="truncate text-sm text-zinc-200 hover:text-zinc-50"
+            className="block text-sm leading-snug text-zinc-200 hover:text-zinc-50"
           >
             {issue.title}
           </a>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1.5 flex items-center gap-2">
             {score !== null && (
               <span className={`font-mono text-[10px] ${
                 score >= 8 ? "text-emerald-400" :
