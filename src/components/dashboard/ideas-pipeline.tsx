@@ -243,7 +243,11 @@ function IdeaRow({
               <SelectTrigger className="h-7 w-[120px] border-zinc-700/50 bg-zinc-900/80 text-[11px] text-zinc-400 hover:border-zinc-600">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="border-zinc-700 bg-zinc-900">
+              <SelectContent
+                position="popper"
+                sideOffset={4}
+                className="min-w-[120px] border-zinc-700 bg-zinc-900"
+              >
                 {STATUS_OPTIONS.map((opt) => (
                   <SelectItem
                     key={opt.value}

@@ -59,7 +59,7 @@ export function KanbanView({ issues }: { issues: GitHubIssue[] }) {
             <SelectTrigger className="h-8 w-[180px] border-zinc-700 bg-zinc-900 text-xs text-zinc-300">
               <SelectValue placeholder="Filter by repo" />
             </SelectTrigger>
-            <SelectContent className="border-zinc-700 bg-zinc-900">
+            <SelectContent position="popper" sideOffset={4} className="border-zinc-700 bg-zinc-900">
               <SelectItem value="all" className="text-xs text-zinc-300">All repos</SelectItem>
               {repos.map((repo) => (
                 <SelectItem key={repo} value={repo} className="text-xs text-zinc-300">
