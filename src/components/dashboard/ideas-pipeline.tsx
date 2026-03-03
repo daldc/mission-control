@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -154,15 +154,24 @@ function IdeaRow({
   score: number | null;
   onRefresh?: () => void;
 }) {
+  const [localStatus, setLocalStatus] = useState<string>(status);
   const [updating, setUpdating] = useState(false);
   const [showRejectInput, setShowRejectInput] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
+
+  // Sync from parent when props change (e.g. after a real refresh lands)
+  const prevStatus = React.useRef(status);
+  if (prevStatus.current !== status) {
+    prevStatus.current = status;
+    setLocalStatus(status);
+  }
 
   async function updateStatus(newStatus: string) {
     if (newStatus === "rejected") {
       setShowRejectInput(true);
       return;
     }
+    setLocalStatus(newStatus); // optimistic update
     setUpdating(true);
     try {
       await fetch("/api/ideas/update", {
@@ -174,9 +183,11 @@ function IdeaRow({
           newStatus,
         }),
       });
-      onRefresh?.();
+      // Delay refresh so GitHub has time to propagate
+      setTimeout(() => onRefresh?.(), 1500);
     } catch (err) {
       console.error("Failed to update idea:", err);
+      setLocalStatus(status); // revert on error
     } finally {
       setUpdating(false);
     }
@@ -239,7 +250,7 @@ function IdeaRow({
           {updating ? (
             <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
           ) : (
-            <Select value={status} onValueChange={updateStatus}>
+            <Select value={localStatus} onValueChange={updateStatus}>
               <SelectTrigger className="h-7 w-[120px] border-zinc-700/50 bg-zinc-900/80 text-[11px] text-zinc-400 hover:border-zinc-600">
                 <SelectValue />
               </SelectTrigger>
