@@ -37,6 +37,36 @@ const PROJECT_META: Record<string, { name: string; description: string; deploy_u
     deploy_url: null,
     paused: false,
   },
+  "daldc/reportai": {
+    name: "ReportAI",
+    description: "AI marketing report generator + ad spend tracker",
+    deploy_url: null,
+    paused: false,
+  },
+  "daldc/ai-golf-caddie": {
+    name: "AI Golf Caddie",
+    description: "Smart AI-powered golf caddie",
+    deploy_url: null,
+    paused: false,
+  },
+  "daldc/local-ai-services": {
+    name: "Local AI Services",
+    description: "Hyper-local AI services for SMBs (HVAC MVP)",
+    deploy_url: null,
+    paused: false,
+  },
+  "daldc/trading": {
+    name: "Trading",
+    description: "Trading framework & strategy docs",
+    deploy_url: null,
+    paused: false,
+  },
+  "daldc/mission-control": {
+    name: "Mission Control",
+    description: "Sprint dashboard & project management",
+    deploy_url: null,
+    paused: false,
+  },
 };
 
 function getHealth(lastActivity: string, paused: boolean): "green" | "yellow" | "red" {

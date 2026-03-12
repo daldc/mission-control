@@ -7,6 +7,11 @@ export const REPOS = [
   "daldc/grocerease",
   "daldc/crosslist",
   "daldc/ideas",
+  "daldc/reportai",
+  "daldc/ai-golf-caddie",
+  "daldc/local-ai-services",
+  "daldc/trading",
+  "daldc/mission-control",
 ] as const;
 
 export const TASK_REPOS = REPOS.filter((r) => r !== "daldc/ideas");
