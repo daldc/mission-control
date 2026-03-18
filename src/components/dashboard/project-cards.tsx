@@ -61,6 +61,24 @@ const PROJECT_META: Record<string, { name: string; description: string; deploy_u
     deploy_url: null,
     paused: false,
   },
+  "daldc/ai-cost-tracker": {
+    name: "AI Cost Tracker",
+    description: "Track & optimize AI API costs for SMBs",
+    deploy_url: null,
+    paused: false,
+  },
+  "daldc/mcp-platform": {
+    name: "MCP Platform",
+    description: "Visual MCP app builder + paid marketplace",
+    deploy_url: null,
+    paused: false,
+  },
+  "daldc/ad-scorer": {
+    name: "Ad Scorer",
+    description: "AI ad creative analyzer & scorer",
+    deploy_url: null,
+    paused: false,
+  },
   "daldc/mission-control": {
     name: "Mission Control",
     description: "Sprint dashboard & project management",

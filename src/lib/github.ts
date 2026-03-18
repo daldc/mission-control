@@ -11,6 +11,9 @@ export const REPOS = [
   "daldc/ai-golf-caddie",
   "daldc/local-ai-services",
   "daldc/trading",
+  "daldc/ai-cost-tracker",
+  "daldc/mcp-platform",
+  "daldc/ad-scorer",
   "daldc/mission-control",
 ] as const;
 
