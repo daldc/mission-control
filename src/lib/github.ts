@@ -15,6 +15,7 @@ export const REPOS = [
   "daldc/mcp-platform",
   "daldc/ad-scorer",
   "daldc/mission-control",
+  "daldc/ai-tools-directory",
 ] as const;
 
 export const TASK_REPOS = REPOS.filter((r) => r !== "daldc/ideas");
