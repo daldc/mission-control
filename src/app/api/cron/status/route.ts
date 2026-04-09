@@ -9,8 +9,8 @@ const GIST_RAW_URL =
 interface RawJob {
   id: string;
   name: string;
-  enabled: boolean;
-  schedule: { kind: string; expr: string; tz?: string };
+  enabled?: boolean;
+  schedule: { kind: string; expr: string; tz?: string; staggerMs?: number };
   state?: {
     nextRunAtMs?: number;
     lastRunAtMs?: number;
@@ -21,24 +21,53 @@ interface RawJob {
   };
 }
 
-function cronToHuman(expr: string, tz?: string): string {
-  // Simple cron-to-human for common patterns
-  const parts = expr.split(" ");
+function formatTime(hour: string, min: string) {
+  const h = Number(hour);
+  const m = min.padStart(2, "0");
+  const suffix = h >= 12 ? "PM" : "AM";
+  const hour12 = h % 12 === 0 ? 12 : h % 12;
+  return `${hour12}:${m} ${suffix}`;
+}
+
+function formatHourList(hourExpr: string, min: string) {
+  return hourExpr
+    .split(",")
+    .map((hour) => formatTime(hour, min))
+    .join(", ");
+}
+
+function cronToHuman(expr: string, tz?: string, staggerMs?: number): string {
+  const parts = expr.trim().split(/\s+/);
   if (parts.length < 5) return expr;
-  const [min, hour, , , dow] = parts;
-  const tzLabel = tz ? ` ${tz.split("/")[1] || tz}` : "";
-  const dayMap: Record<string, string> = {
-    "*": "Daily",
-    "1-5": "Weekdays",
-    "6": "Saturdays",
-    "0": "Sundays",
-  };
-  const dayStr = dayMap[dow] || `DoW ${dow}`;
-  if (hour.includes(",")) {
-    const hours = hour.split(",");
-    return `Every 2h (${hours[0]}:${min.padStart(2, "0")}-${hours[hours.length - 1]}:${min.padStart(2, "0")}${tzLabel})`;
+
+  const [min, hour, dom, month, dow] = parts;
+  const tzLabel = tz ? ` ${tz.split("/").pop() || tz}` : "";
+  const staggerLabel = staggerMs ? ` (+${Math.round(staggerMs / 60000)}m stagger)` : "";
+
+  if (expr === "0 * * * *") return `Hourly${staggerLabel}`;
+  if (hour.includes(",") && dom === "*" && month === "*" && dow === "*") {
+    return `Daily at ${formatHourList(hour, min)}${tzLabel}`;
   }
-  return `${dayStr} at ${hour}:${min.padStart(2, "0")}${tzLabel}`;
+  if (dom === "*" && month === "*" && dow === "*") {
+    return `Daily at ${formatTime(hour, min)}${tzLabel}`;
+  }
+  if (dom === "*" && month === "*" && dow === "1-5") {
+    return `Weekdays at ${formatTime(hour, min)}${tzLabel}`;
+  }
+  if (dom === "*" && month === "*" && dow === "1-4") {
+    return `Mon-Thu at ${formatTime(hour, min)}${tzLabel}`;
+  }
+  if (dom === "*" && month === "*" && dow === "6") {
+    return `Saturdays at ${formatTime(hour, min)}${tzLabel}`;
+  }
+  if (dom === "*" && month === "*" && dow === "0") {
+    return `Sundays at ${formatTime(hour, min)}${tzLabel}`;
+  }
+  if (dom !== "*" && month === "*" && dow === "*") {
+    return `Monthly on day ${dom} at ${formatTime(hour, min)}${tzLabel}`;
+  }
+
+  return `${expr}${tzLabel}`;
 }
 
 function formatJob(j: RawJob) {
@@ -48,7 +77,7 @@ function formatJob(j: RawJob) {
     id: j.id,
     name: j.name || j.id,
     schedule: j.schedule?.expr || "",
-    schedule_human: cronToHuman(j.schedule?.expr || "", j.schedule?.tz),
+    schedule_human: cronToHuman(j.schedule?.expr || "", j.schedule?.tz, j.schedule?.staggerMs),
     last_run: state.lastRunAtMs ? new Date(state.lastRunAtMs).toISOString() : "",
     next_run: state.nextRunAtMs ? new Date(state.nextRunAtMs).toISOString() : "",
     last_status: state.lastStatus === "ok" ? "success" : state.lastStatus === "error" ? "error" : "warning",
@@ -68,7 +97,7 @@ async function fetchLocal(): Promise<ReturnType<typeof formatJob>[] | null> {
     });
     const data = JSON.parse(output);
     const jobs: RawJob[] = data.jobs || data;
-    return jobs.map(formatJob);
+    return jobs.filter((job) => job.enabled !== false).map(formatJob);
   } catch {
     return null;
   }
